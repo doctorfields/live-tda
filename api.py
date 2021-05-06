@@ -49,7 +49,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost", "http://localhost:8080"],
+    allow_origins=["http://localhost", "http://localhost:8080", "https://doctorfields.github.io/live-tda/"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
