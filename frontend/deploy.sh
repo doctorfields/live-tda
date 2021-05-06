@@ -11,5 +11,6 @@ git init
 git add -A
 git commit -m 'deploy'
 git push -f https://github.com/doctorfields/live-tda.git master:gh-pages
+rm -rf .git
 
 cd -
