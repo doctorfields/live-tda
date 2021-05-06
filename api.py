@@ -40,11 +40,11 @@ class VietorisRipsHomologyInput(BaseModel):
 
 app = FastAPI()
 
-app.mount("/dist", StaticFiles(directory="frontend/dist/"), name="dist")
-app.mount("/css", StaticFiles(directory="frontend/dist/css"), name="css")
-app.mount("/img", StaticFiles(directory="frontend/dist/img"), name="img")
-app.mount("/js", StaticFiles(directory="frontend/dist/js"), name="js")
-templates = Jinja2Templates(directory="frontend/dist")
+# app.mount("/dist", StaticFiles(directory="frontend/dist/"), name="dist")
+# app.mount("/css", StaticFiles(directory="frontend/dist/css"), name="css")
+# app.mount("/img", StaticFiles(directory="frontend/dist/img"), name="img")
+# app.mount("/js", StaticFiles(directory="frontend/dist/js"), name="js")
+# templates = Jinja2Templates(directory="frontend/dist")
 
 
 app.add_middleware(
@@ -56,9 +56,9 @@ app.add_middleware(
 )
 
 
-@app.get("/", response_class=HTMLResponse)
-async def root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+# @app.get("/", response_class=HTMLResponse)
+# async def root(request: Request):
+#     return templates.TemplateResponse("index.html", {"request": request})
 
 
 @app.get("/api/generate-data/")
