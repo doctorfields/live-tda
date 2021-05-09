@@ -11,7 +11,9 @@ from pydantic import BaseModel
 import numpy as np
 import cubix
 from scipy.spatial import distance_matrix
-from gtda.homology import VietorisRipsPersistence
+import cechmate as cm
+from scipy import sparse
+from gtda.homology import VietorisRipsPersistence, EuclideanCechPersistence
 
 
 class ShapeType(Enum):
@@ -36,15 +38,10 @@ class CubicalHomologyInput(BaseModel):
 
 class VietorisRipsHomologyInput(BaseModel):
     points: List[List[float]]
+    max_distance: float = 0.5
 
 
 app = FastAPI()
-
-# app.mount("/dist", StaticFiles(directory="frontend/dist/"), name="dist")
-# app.mount("/css", StaticFiles(directory="frontend/dist/css"), name="css")
-# app.mount("/img", StaticFiles(directory="frontend/dist/img"), name="img")
-# app.mount("/js", StaticFiles(directory="frontend/dist/js"), name="js")
-# templates = Jinja2Templates(directory="frontend/dist")
 
 
 app.add_middleware(
@@ -54,11 +51,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# @app.get("/", response_class=HTMLResponse)
-# async def root(request: Request):
-#     return templates.TemplateResponse("index.html", {"request": request})
 
 
 @app.get("/api/generate-data/")
@@ -76,13 +68,16 @@ async def get_cubical_homology(data: CubicalHomologyInput):
     filtration = homology.filtration
     grid = filtration.grid
     return {
-        "filtration": [
-            {
-                "value": cube.value,
-                "points": [grid[point] for point in cube.points],
-                "dimension": cube.dimension,
-            } for cube in filtration.body
-        ],
+        "filtration": {
+            "range": [0, 1],
+            "simplices": [
+                {
+                    "value": cube.value,
+                    "points": [grid[point] for point in cube.points],
+                    "dimension": cube.dimension,
+                } for cube in filtration.body
+            ],
+        },
         "grid": [m.tolist() for m in grid.mounting],
         "holes": [
             {
@@ -97,34 +92,63 @@ async def get_cubical_homology(data: CubicalHomologyInput):
 
 
 @app.post("/api/get-vr-homology/")
-async def vr_homology(data: VietorisRipsHomologyInput):
+async def get_vr_homology(data: VietorisRipsHomologyInput):
     points = np.array(data.points)
     N, dim = points.shape
-    VR = VietorisRipsPersistence(homology_dimensions=list(range(dim)))
-    d = distance_matrix(points, points)
-    filtration = []
-    for dim in range(dim + 1):
-        for comb in combinations(range(N), dim+1):
-            filtration.append({
-                "points": [points[i].tolist() for i in comb],
-                "value": max(d[i,j] for i,j in combinations(comb, 2)) if len(comb) > 1 else 0
-            })
-    filtration.sort(key=lambda x: x["value"])
-    diagrams = VR.fit_transform([points])[0]
+    rips = cm.Rips()
+    filt = rips.build(points)
+    filt = [(simplex, value / 2) for simplex, value in filt]  # Make the indx to be the radius of circles
+    filt_range = [min(filt, key=lambda x: x[1])[1], max(filt, key=lambda x: x[1])[1]]
+    diagrams = cm.solver.phat_diagrams(filt, verbose=False)
+    diagrams[0] = np.concatenate([diagrams[0], np.array([filt_range])])  # Append first connected component to compare with Cubix
     return {
-        "filtration": [
-            {
-                "value": simplex["value"],
-                "points": simplex["points"],
-                "dimension": len(simplex["points"]) - 1,
-            } for simplex in filtration
-        ],
+        "filtration": {
+            "range": filt_range,
+            "simplices": [
+                {
+                    "value": value,
+                    "points": points[simplex].tolist(),
+                    "dimension": len(simplex) - 1,
+                } for simplex, value in filt
+            ],
+        },
         "holes": [
             {
-                "birth": born,
+                "birth": birth,
                 "death": death,
-                "lifetime": death - born,
+                "lifetime": death - birth,
                 "dimension": dim,
-            } for born, death, dim in diagrams
+            } for dim, simplices in enumerate(diagrams) for birth, death in simplices
+        ],
+    }
+
+
+@app.post("/api/get-cech-homology/")
+async def get_cech_homology(data: VietorisRipsHomologyInput):
+    points = np.array(data.points)
+    N, dim = points.shape
+    cech = cm.Cech()
+    filt = cech.build(points)
+    filt_range = [min(filt, key=lambda x: x[1])[1], max(filt, key=lambda x: x[1])[1]]
+    diagrams = cm.solver.phat_diagrams(filt, verbose=False)
+    diagrams[0] = np.concatenate([diagrams[0], np.array([filt_range])])  # Append first connected component to compare with Cubix
+    return {
+        "filtration": {
+            "range": filt_range,
+            "simplices": [
+                {
+                    "value": value,
+                    "points": points[simplex].tolist(),
+                    "dimension": len(simplex) - 1,
+                } for simplex, value in filt
+            ],
+        },
+        "holes": [
+            {
+                "birth": birth,
+                "death": death,
+                "lifetime": death - birth,
+                "dimension": dim,
+            } for dim, simplices in enumerate(diagrams) for birth, death in simplices
         ],
     }
