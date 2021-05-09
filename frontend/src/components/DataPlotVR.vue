@@ -7,8 +7,26 @@
             :cx="xScale(point[0])" :cy="yScale(point[1])" r="2" />
         </g>
         <g class="balls" :visibility="this.showBalls?'visible':'hidden'">
-          <circle v-for="(point, index) in points" :key="index"
-            :cx="xScale(point[0])" :cy="yScale(point[1])" :r="filtrationIndex*10" />
+          <circle class="ball" v-for="(point, index) in points" :key="index"
+            :cx="xScale(point[0])" :cy="yScale(point[1])" :r="ballsRadius" />
+        </g>
+        <g class="simplices" :visibility="this.showSimplices?'visible':'hidden'">
+          <g class="d0simplices">
+            <circle v-for="(simplex, index) in simplicesByDimension[0]" :key="index"
+              :cx="xScale(simplex.points[0][0])" :cy="yScale(simplex.points[0][1])" :r="4"
+              :opacity="simplex.value<filtrationIndex?1:0"/>
+          </g>
+          <g class="d1simplices">
+            <line v-for="(simplex, index) in simplicesByDimension[1]" :key="index"
+              :x1="xScale(simplex.points[0][0])" :y1="yScale(simplex.points[0][1])"
+              :x2="xScale(simplex.points[1][0])" :y2="yScale(simplex.points[1][1])"
+              :opacity="simplex.value<filtrationIndex?1:0"/>
+          </g>
+          <g class="d2simplices">
+            <polygon v-for="(simplex, index) in simplicesByDimension[2]" :key="index"
+              :points="`${xScale(simplex.points[0][0])},${yScale(simplex.points[0][1])} ${xScale(simplex.points[1][0])},${yScale(simplex.points[1][1])} ${xScale(simplex.points[2][0])},${yScale(simplex.points[2][1])}`"
+              :opacity="simplex.value<filtrationIndex?1:0"/>
+          </g>
         </g>
       </svg>
       <div class="d-flex justify-center align-center" style="width: 100%; height: 100%;" v-if="!points">
@@ -39,7 +57,7 @@
     data: function () {
       return {
         showPoints: true,
-        showBalls: false,
+        showBalls: true,
         showSimplices: true,
         isMounted: false,
       }
@@ -74,8 +92,18 @@
         return d3.scaleLinear().domain(this.plotRange[0]).range([0, this.chartWidth]);
       },
       yScale() {
-        return d3.scaleLinear().domain(this.plotRange[1]).range([0, this.chartHeight]);
+        return d3.scaleLinear().domain(this.plotRange[1]).range([0, this.chartWidth]);
       },
+      ballsRadius() {
+        return this.xScale(this.filtrationIndex) - this.xScale(0);
+      },
+      simplicesByDimension() {
+        let simplicesByDimension = [[],[],[]];
+        this.simplices.forEach((element) => {
+          simplicesByDimension[element.dimension].push(element);
+        });
+        return simplicesByDimension;
+      }
     },
     methods: {
       scalePoint([x, y]) {

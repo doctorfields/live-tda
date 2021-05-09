@@ -64,6 +64,13 @@
                   </div>
                 </div>
               </v-slide-y-transition>
+              <v-slide-y-transition>
+                <div v-show="filtrationType == 'cech'">
+                  <div class="d-flex justify-space-between">
+                    <v-text-field class="mx-1" v-model="margin" type="number" step="0.1" :label="$t('Margin')" :hint="$t('This only affects to visualization')"/>
+                  </div>
+                </div>
+              </v-slide-y-transition>
             </v-card-text>
           </v-card>
         </v-col>
@@ -72,7 +79,7 @@
             <v-card-title>{{ $t('Filtration index') }}</v-card-title>
             <v-card-text>
               <v-slider v-model="filtrationIndex"
-                min="0" max="1" :step="filtrationIndexStep"
+                :min="filtrationRange[0]" :max="filtrationRange[1]" :step="filtrationIndexStep"
                 thumb-label
                 tick-size=0.1
                 :tick-labels="filtrationTickLabels"
@@ -82,7 +89,7 @@
           <v-card class="mx-1 my-3">
             <v-card-title>{{ $t('Persistence diagram') }}</v-card-title>
             <v-card-text>
-              <PersistenceDiagram :holes="holes" :filtrationIndex="filtrationIndex" />
+              <PersistenceDiagram :holes="holes" :filtrationRange="filtrationRange" :filtrationIndex="filtrationIndex" />
             </v-card-text>
           </v-card>
         </v-col>
@@ -90,8 +97,9 @@
           <v-card class="mx-1 my-3">
             <v-card-title>{{ $t('Data cloud') }}</v-card-title>
             <v-card-text>
-              <DataPlot v-if="filtrationType=='kde'" :points="points" :margin="margin" :grid="grid" :simplices="filtration" :kdeData="kdeData" :filtrationIndex="filtrationIndex" />
-              <DataPlotVR v-if="filtrationType=='vr'" :points="points" :margin="margin" :simplices="filtration" :filtrationIndex="filtrationIndex" />
+              <DataPlotKDE v-if="filtrationType=='kde'" :points="points" :margin="margin" :grid="grid" :simplices="filtrationSimplices" :kdeData="kdeData" :filtrationIndex="filtrationIndex" />
+              <DataPlotVR v-if="filtrationType=='vr'" :points="points" :margin="margin" :simplices="filtrationSimplices" :filtrationIndex="filtrationIndex" />
+              <DataPlotVR v-if="filtrationType=='cech'" :points="points" :margin="margin" :simplices="filtrationSimplices" :filtrationIndex="filtrationIndex" />
             </v-card-text>
           </v-card>
         </v-col>
@@ -105,7 +113,7 @@
   import requestsMixin from './helpers/requestsMixin'
   import Alert from './components/Alert'
   import Languages from './components/Languages'
-  import DataPlot from './components/DataPlot'
+  import DataPlotKDE from './components/DataPlotKDE'
   import DataPlotVR from './components/DataPlotVR'
   import PersistenceDiagram from './components/PersistenceDiagram'
 
@@ -115,13 +123,13 @@
     components: {
       Alert,
       Languages,
-      DataPlot,
+      DataPlotKDE,
       DataPlotVR,
       PersistenceDiagram,
     },
     data: () => {
       return {
-        N: 100,
+        N: 20,
         error: 0.1,
         shape: "s1",
         seed: 42,
@@ -132,13 +140,13 @@
         dataOrigin: "syntetic",
         points: [],
         grid: [[-1,1],[-1,1]],
-        filtration: [],
+        filtrationRange: [0,1],
+        filtrationSimplices: [],
         holes: [],
         kdeData: [[]],
         filtrationType: "kde",
         filtrationIndex: 0,
         filtrationIndexStep: 0.01,
-        filtrationTickLabels: [...Array(100).keys()].map(x => (x%25==0)?x/100:null),
       }
     },
     computed: {
@@ -158,6 +166,7 @@
           margin: this.margin,
           kde_precision: this.kdePrecision,
           kde_bw: this.kdeBandwidth,
+          max_distance: this.maxDistance,
         }
       },
       shapeTypes() {
@@ -173,14 +182,20 @@
           { value: "kde", text: this.$t("Cubical through KDE") },
         ]
       },
+      filtrationTickLabels() {
+        let nTicks = parseInt((this.filtrationRange[1]-this.filtrationRange[0]) / this.filtrationIndexStep);
+        return [...Array(nTicks).keys()].map(x => (x%25==0)?x/100:null)
+      },
     },
     methods: {
       getData() {
-        this.request('get', 'generate-data/', {
-          params: this.dataFormSet,
-        }).then((response) => {
-          this.points = response.data.points;
-        })
+        if (this.N > 2) {
+          this.request('get', 'generate-data/', {
+            params: this.dataFormSet,
+          }).then((response) => {
+            this.points = response.data.points;
+          })
+        }
       },
       getHomology() {
         if (this.filtrationType == "kde") {
@@ -188,7 +203,8 @@
             data: this.filtrationFormSet,
           }).then((response) => {
             this.grid = response.data.grid;
-            this.filtration = response.data.filtration;
+            this.filtrationSimplices = response.data.filtration.simplices;
+            this.filtrationRange = response.data.filtration.range;
             this.holes = response.data.holes;
             this.kdeData = response.data.kde;
           })
@@ -196,7 +212,16 @@
           this.request('post', 'get-vr-homology/', {
             data: this.filtrationFormSet,
           }).then((response) => {
-            this.filtration = response.data.filtration;
+            this.filtrationSimplices = response.data.filtration.simplices;
+            this.filtrationRange = response.data.filtration.range;
+            this.holes = response.data.holes;
+          })
+        } else if (this.filtrationType == "cech") {
+          this.request('post', 'get-cech-homology/', {
+            data: this.filtrationFormSet,
+          }).then((response) => {
+            this.filtrationSimplices = response.data.filtration.simplices;
+            this.filtrationRange = response.data.filtration.range;
             this.holes = response.data.holes;
           })
         }

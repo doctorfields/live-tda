@@ -19,7 +19,7 @@
   import * as d3 from 'd3'
 
   export default {
-    name: 'DataPlot',
+    name: 'DataPlotKDE',
     props: {
       points: { type: Array },
       grid: { type: Array },
